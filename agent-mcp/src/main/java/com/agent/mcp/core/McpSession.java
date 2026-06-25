@@ -165,8 +165,13 @@ public class McpSession implements Closeable {
      *
      * @return 工具定义列表
      */
-    public List<ToolDefinition> fetchTools()throws IOException {
-      JsonRpcMessage request = JsonRpcMessage.request(
+    public List<ToolDefinition> fetchTools() throws IOException {
+        // 已缓存则直接返回，避免重复 RPC 调用
+        if (this.tools != null) {
+            return this.tools;
+        }
+
+        JsonRpcMessage request = JsonRpcMessage.request(
         "tools/list",
         null,
         String.valueOf(requestIdCounter.getAndIncrement())

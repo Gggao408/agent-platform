@@ -1,8 +1,10 @@
 package com.agent.mcp.core;
 
+import com.agent.common.model.ToolDefinition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -54,9 +56,9 @@ public class McpSessionManager {
         try {
             McpSession session = new McpSession(name, cmd);
             session.start();
-            session.fetchTools();
+            List<ToolDefinition> tools = session.fetchTools();
             sessions.put(name, session);
-            log.info("MCP Server 启动成功: {} ({} 个工具)", name, session.fetchTools().size());
+            log.info("MCP Server 启动成功: {} ({} 个工具)", name, tools.size());
         } catch (Exception e) {
             log.error("MCP Server 启动失败: {}", name, e);
         }

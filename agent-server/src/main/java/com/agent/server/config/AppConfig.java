@@ -5,7 +5,6 @@ import com.agent.core.FcAgentEngine;
 import com.agent.llm.BailianLlmService;
 import com.agent.llm.LlmService;
 import com.agent.llm.OllamaLlmService;
-import com.agent.mcp.core.McpSession;
 import com.agent.mcp.core.McpSessionManager;
 import com.agent.mcp.integration.McpToolRegistry;
 import com.agent.rag.*;
@@ -133,24 +132,23 @@ public class AppConfig {
      */
     @Bean
     public McpSessionManager mcpSessionManager() {
-        // TODO: 注册并启动所有 MCP Server
-        // 当前返回空 Manager，让项目能先跑起来。
-        // 等你实现了 McpSessionManager 的三个方法后，在这里注册 MCP Server：
-        //
-        // manager.registerServer("database",
-        //     "java", "-cp", "agent-mcp/target/classes;agent-common/target/classes",
-        //     "com.agent.mcp.servers.DatabaseMcpServer");
-        // manager.registerServer("http-api",
-        //     "java", "-cp", "agent-mcp/target/classes;agent-common/target/classes",
-        //     "com.agent.mcp.servers.HttpApiMcpServer");
-        // manager.initAll();
-        //
-        return new McpSessionManager() {
-            @Override
-            public McpSession getSession(String serverName) {
-                throw new UnsupportedOperationException("MCP 尚未初始化，请先实现 McpSessionManager.initAll()");
-            }
-        };
+        McpSessionManager manager = new McpSessionManager();
+
+        // 注册 Database MCP Server
+        manager.registerServer("database",
+                "java", "-cp",
+                "agent-mcp/target/classes;agent-common/target/classes",
+                "com.agent.mcp.servers.DatabaseMcpServer");
+
+        // 注册 HTTP API MCP Server
+        manager.registerServer("http-api",
+                "java", "-cp",
+                "agent-mcp/target/classes;agent-common/target/classes",
+                "com.agent.mcp.servers.HttpApiMcpServer");
+
+        // 启动所有已注册的 MCP Server
+        manager.initAll();
+        return manager;
     }
 
     @Bean

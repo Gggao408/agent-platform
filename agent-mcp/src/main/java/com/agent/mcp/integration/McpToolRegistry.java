@@ -6,7 +6,6 @@ import com.agent.mcp.core.McpSessionManager;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -76,8 +75,31 @@ public class McpToolRegistry {
      * }</pre>
      */
     public void loadAllTools() {
-        // TODO: 加载所有 MCP Server 的工具
-        throw new UnsupportedOperationException("TODO: 加载 MCP 工具列表");
+        toolDefinitions.clear();
+        toolToServer.clear();
+
+        for (var entry : sessionManager.getAllSessions().entrySet()) {
+            String serverName = entry.getKey();
+            McpSession session = entry.getValue();
+            try {
+                List<ToolDefinition> tools = session.fetchTools();
+                for (ToolDefinition td : tools) {
+                    String fullName = serverName + ":" + td.getName();
+                    ToolDefinition prefixed = ToolDefinition.builder()
+                            .name(fullName)
+                            .description(td.getDescription())
+                            .parameters(td.getParameters())
+                            .build();
+                    toolDefinitions.put(fullName, prefixed);
+                    toolToServer.put(fullName, serverName);
+                    log.debug("注册工具: {} (来自 {} )", fullName, serverName);
+                }
+                log.info("已加载 {} 的工具: {} 个", serverName, tools.size());
+            } catch (Exception e) {
+                log.error("加载 MCP Server {} 的工具失败", serverName, e);
+            }
+        }
+        log.info("MCP 工具注册中心初始化完成，共 {} 个工具", toolDefinitions.size());
     }
 
     // ==========================================================
@@ -100,8 +122,28 @@ public class McpToolRegistry {
      * @return 执行结果
      */
     public JsonNode execute(String toolName, JsonNode arguments) {
-        // TODO: 路由到正确的 MCP Server 并执行工具
-        throw new UnsupportedOperationException("TODO: 执行 MCP 工具");
+        // 1. 查找工具所属的 MCP Server
+        String serverName = toolToServer.get(toolName);
+        if (serverName == null) {
+            throw new IllegalArgumentException("未注册的工具: " + toolName);
+        }
+
+        // 2. 获取对应的 Session
+        McpSession session = sessionManager.getSession(serverName);
+
+        // 3. 去掉 serverName: 前缀，恢复原始工具名
+        String prefix = serverName + ":";
+        String originalName = toolName.startsWith(prefix)
+                ? toolName.substring(prefix.length())
+                : toolName;
+
+        // 4. 调用远程工具
+        try {
+            return session.callTool(originalName, arguments);
+        } catch (Exception e) {
+            throw new RuntimeException(
+                    "执行 MCP 工具失败 [" + toolName + "] on server [" + serverName + "]: " + e.getMessage(), e);
+        }
     }
 
     // ==========================================================
