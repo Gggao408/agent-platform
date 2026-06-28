@@ -69,8 +69,23 @@ public class DatabaseMcpServer extends McpServer {
      * }</pre>
      */
     private void initDataSource() {
-        // TODO: 初始化 H2 数据源 + 创建示例数据
-        throw new UnsupportedOperationException("TODO: 初始化数据源");
+        HikariConfig config = new HikariConfig();
+       config.setJdbcUrl("jdbc:h2:mem:agentdb;DB_CLOSE_DELAY=-1");
+    config.setUsername("sa");
+    config.setPassword("");
+    this.dataSource = new HikariDataSource(config);
+     try (Connection conn = dataSource.getConnection();
+         Statement stmt = conn.createStatement()) {
+        stmt.execute("CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100), email VARCHAR(200))");
+        stmt.execute("INSERT INTO users VALUES (1, '张三', 'zhangsan@example.com')");
+        stmt.execute("INSERT INTO users VALUES (2, '李四', 'lisi@example.com')");
+        stmt.execute("CREATE TABLE orders (id INT PRIMARY KEY, user_id INT, product VARCHAR(200), amount DECIMAL(10,2))");
+        stmt.execute("INSERT INTO orders VALUES (1, 1, '笔记本电脑', 6999.00)");
+        stmt.execute("INSERT INTO orders VALUES (2, 2, '机械键盘', 399.00)");
+        log.info("H2 初始化完成:users(2行), orders(2行)");
+    } catch (SQLException e) {
+        throw new RuntimeException("H2 初始化失败", e);
+    }
     }
 
     // ==========================================================
@@ -80,7 +95,7 @@ public class DatabaseMcpServer extends McpServer {
     private void registerTools() {
         // 工具1：执行 SQL 查询
         registerTool("query_database",
-                "执行只读SQL查询（仅允许SELECT语句），返回JSON格式的结果集",
+                "执行只读SQL查询(仅允许SELECT语句),da返回JSON格式的结果集",
                 SchemaFactory.object()
                         .add("sql", SchemaFactory.string("要执行的SELECT查询语句"))
                         .required("sql")
@@ -133,9 +148,49 @@ public class DatabaseMcpServer extends McpServer {
      * }</pre>
      */
     private JsonNode executeQuery(JsonNode arguments) throws Exception {
-        // TODO: 1. 获取 sql 参数  2. 安全检查  3. 执行查询  4. 构建 JSON 返回
-        throw new UnsupportedOperationException("TODO: 实现 SQL 查询执行");
+       rivate JsonNode executeQuery(JsonNode arguments) throws Exception {
+    String sql = arguments.get("sql").asText().trim();
+
+    // 安全检查
+    String upperSql = sql.toUpperCase();
+    String[] forbidden = {"DROP", "DELETE", "INSERT", "UPDATE", "TRUNCATE", "ALTER", "CREATE"};
+    for (String kw : forbidden) {
+        if (upperSql.contains(kw)) {
+            throw new IllegalArgumentException("不允许的关键字: " + kw);
+        }
     }
+    if (!upperSql.startsWith("SELECT")) {
+        throw new IllegalArgumentException("仅允许 SELECT 查询");
+    }
+
+    try (Connection conn = dataSource.getConnection();
+         Statement stmt = conn.createStatement();
+         ResultSet rs = stmt.executeQuery(sql)) {
+
+        ResultSetMetaData meta = rs.getMetaData();
+        int colCount = meta.getColumnCount();
+
+        ArrayNode columns = mapper.createArrayNode();
+        for (int i = 1; i <= colCount; i++) {
+            columns.add(meta.getColumnName(i));
+        }
+
+        ArrayNode rows = mapper.createArrayNode();
+        while (rs.next()) {
+            ObjectNode row = mapper.createObjectNode();
+            for (int i = 1; i <= colCount; i++) {
+                row.put(meta.getColumnName(i), String.valueOf(rs.getObject(i)));
+            }
+            rows.add(row);
+        }
+
+        ObjectNode result = mapper.createObjectNode();
+        result.set("columns", columns);
+        result.set("rows", rows);
+        result.put("row_count", rows.size());
+        return result;
+    }
+}
 
     /**
      * TODO: 列出所有表及其行数。
@@ -147,8 +202,27 @@ public class DatabaseMcpServer extends McpServer {
      * }</pre>
      */
     private JsonNode listTables(JsonNode arguments) throws Exception {
-        // TODO: 查询所有用户表，返回表名和行数
-        throw new UnsupportedOperationException("TODO: 实现 listTables");
+         String sql = "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA='PUBLIC' AND TABLE_TYPE='TABLE'";
+    try (Connection conn = dataSource.getConnection();
+         Statement stmt = conn.createStatement();
+         ResultSet rs = stmt.executeQuery(sql)) {
+
+        ArrayNode tables = mapper.createArrayNode();
+        while (rs.next()) {
+            String tableName = rs.getString("TABLE_NAME");
+            int count = 0;
+            try (Statement s2 = conn.createStatement();
+                 ResultSet rs2 = s2.executeQuery("SELECT COUNT(*) FROM " + tableName)) {
+                if (rs2.next()) count = rs2.getInt(1);
+            }
+            ObjectNode t = mapper.createObjectNode();
+            t.put("table_name", tableName);
+            t.put("row_count", count);
+            tables.add(t);
+        }
+        ObjectNode result = mapper.createObjectNode();
+        result.set("tables", tables);
+        return result;
     }
 
     /**
@@ -162,8 +236,26 @@ public class DatabaseMcpServer extends McpServer {
      * }</pre>
      */
     private JsonNode describeTable(JsonNode arguments) throws Exception {
-        // TODO: 实现 describeTable
-        throw new UnsupportedOperationException("TODO: 实现 describeTable");
+        String tableName = arguments.get("table_name").asText();
+    String sql = "SELECT COLUMN_NAME, TYPE_NAME, NULLABLE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME=?";
+    try (Connection conn = dataSource.getConnection();
+         PreparedStatement stmt = conn.prepareStatement(sql)) {
+        stmt.setString(1, tableName.toUpperCase());
+        ResultSet rs = stmt.executeQuery();
+
+        ArrayNode columns = mapper.createArrayNode();
+        while (rs.next()) {
+            ObjectNode col = mapper.createObjectNode();
+            col.put("column_name", rs.getString("COLUMN_NAME"));
+            col.put("type", rs.getString("TYPE_NAME"));
+            col.put("nullable", rs.getString("NULLABLE"));
+            columns.add(col);
+        }
+        ObjectNode result = mapper.createObjectNode();
+        result.put("table_name", tableName);
+        result.set("columns", columns);
+        return result;
+    }
     }
 
     // ===== 入口 =====
@@ -175,7 +267,6 @@ public class DatabaseMcpServer extends McpServer {
      * }</pre>
      */
     public static void main(String[] args) {
-        // TODO: 启动 DatabaseMcpServer
-        throw new UnsupportedOperationException("TODO: 启动 DatabaseMcpServer");
+       new DatabaseMcpServer().start();
     }
 }

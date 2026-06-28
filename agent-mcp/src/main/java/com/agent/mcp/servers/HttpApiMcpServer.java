@@ -4,6 +4,7 @@ import com.agent.mcp.core.McpServer;
 import com.agent.mcp.core.SchemaFactory;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
  * HTTP API MCP Server — 让 Agent 能够调用外部 REST API。
@@ -72,16 +73,46 @@ public class HttpApiMcpServer extends McpServer {
      * }</pre>
      */
     private JsonNode httpGet(JsonNode arguments) throws Exception {
-        // TODO: 实现 HTTP GET 请求
-        throw new UnsupportedOperationException("TODO: 实现 HTTP GET");
-    }
+        String url = arguments.get("url").asText();
+    java.net.http.HttpClient client = java.net.http.HttpClient.newBuilder()
+            .connectTimeout(java.time.Duration.ofSeconds(10))
+            .build();
+    java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+            .uri(java.net.URI.create(url))
+            .timeout(java.time.Duration.ofSeconds(30))
+            .GET()
+            .build();
+    java.net.http.HttpResponse<String> response = client.send(request,
+            java.net.http.HttpResponse.BodyHandlers.ofString());
+
+    ObjectNode result = mapper.createObjectNode();
+    result.put("status", response.statusCode());
+    result.put("body", response.body());
+    return result;
 
     /**
      * TODO: 实现 HTTP POST 请求。
      */
     private JsonNode httpPost(JsonNode arguments) throws Exception {
-        // TODO: 实现 HTTP POST 请求
-        throw new UnsupportedOperationException("TODO: 实现 HTTP POST");
+      String url = arguments.get("url").asText();
+    String body = arguments.has("body") ? arguments.get("body").asText() : "{}";
+
+    java.net.http.HttpClient client = java.net.http.HttpClient.newBuilder()
+            .connectTimeout(java.time.Duration.ofSeconds(10))
+            .build();
+    java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+            .uri(java.net.URI.create(url))
+            .timeout(java.time.Duration.ofSeconds(30))
+            .header("Content-Type", "application/json")
+            .POST(java.net.http.HttpRequest.BodyPublishers.ofString(body))
+            .build();
+    java.net.http.HttpResponse<String> response = client.send(request,
+            java.net.http.HttpResponse.BodyHandlers.ofString());
+
+    ObjectNode result = mapper.createObjectNode();
+    result.put("status", response.statusCode());
+    result.put("body", response.body());
+    return result;
     }
 
     // ===== 入口 =====
