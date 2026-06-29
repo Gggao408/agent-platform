@@ -36,6 +36,10 @@
             <groupId>com.agent</groupId>
             <artifactId>agent-rag</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.agent</groupId>
+            <artifactId>agent-workflow</artifactId>
+        </dependency>
 
         <!-- Spring Boot WebFlux (SSE 流式响应核心) -->
         <dependency>

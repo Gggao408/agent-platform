@@ -176,6 +176,35 @@ public class AppConfig {
     }
 
     // ==========================================================
+    // Workflow 工作流引擎
+    // ==========================================================
+
+    @Bean
+    public com.agent.workflow.engine.WorkflowEngine workflowEngine(McpToolRegistry toolRegistry,
+                                                                     ObjectMapper objectMapper) {
+        return new com.agent.workflow.engine.WorkflowEngine(toolRegistry, objectMapper);
+    }
+
+    @Bean
+    public com.agent.workflow.engine.WorkflowToolBridge workflowToolBridge(
+            com.agent.workflow.engine.WorkflowEngine workflowEngine,
+            ObjectMapper objectMapper,
+            McpToolRegistry mcpToolRegistry) {
+        var bridge = new com.agent.workflow.engine.WorkflowToolBridge(workflowEngine, objectMapper);
+        mcpToolRegistry.registerDirectTool("execute_workflow",
+                bridge.getToolDefinition(),
+                args -> {
+                    try {
+                        return bridge.execute(args);
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+        log.info("Workflow 工具已注册到 Agent");
+        return bridge;
+    }
+
+    // ==========================================================
     // RAG 知识库
     // ==========================================================
 

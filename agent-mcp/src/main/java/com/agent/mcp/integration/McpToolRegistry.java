@@ -123,6 +123,15 @@ public class McpToolRegistry {
      * @return 执行结果
      */
     public JsonNode execute(String toolName, JsonNode arguments) {
+        // 优先检查直接注册的工具（不走 MCP 子进程）
+        if (directHandlers.containsKey(toolName)) {
+            try {
+                return directHandlers.get(toolName).apply(arguments);
+            } catch (Exception e) {
+                throw new RuntimeException("执行直接工具失败 [" + toolName + "]: " + e.getMessage(), e);
+            }
+        }
+
         // 1. 查找工具所属的 MCP Server
         String serverName = toolToServer.get(toolName);
         if (serverName == null) {
@@ -145,6 +154,31 @@ public class McpToolRegistry {
             throw new RuntimeException(
                     "执行 MCP 工具失败 [" + toolName + "] on server [" + serverName + "]: " + e.getMessage(), e);
         }
+    }
+
+    // ===== 直接注册的工具处理器（不走 MCP 子进程） =====
+    private final Map<String, java.util.function.Function<JsonNode, JsonNode>> directHandlers
+            = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * 直接注册一个工具（不走 MCP Server 子进程，适用于内存内工具）。
+     * 例如：WorkflowToolBridge 的 execute_workflow。
+     *
+     * @param toolName       工具短名（如 "execute_workflow"）
+     * @param toolDefinition 工具定义
+     * @param handler        执行处理器
+     */
+    public void registerDirectTool(String toolName, ToolDefinition toolDefinition,
+                                    java.util.function.Function<JsonNode, JsonNode> handler) {
+        String fullName = "workflow:" + toolName;
+        toolDefinitions.put(fullName, ToolDefinition.builder()
+                .name(fullName)
+                .description(toolDefinition.getDescription())
+                .parameters(toolDefinition.getParameters())
+                .build());
+        toolToServer.put(fullName, "workflow");
+        directHandlers.put(fullName, handler);
+        log.info("注册直接工具: {}", fullName);
     }
 
     // ==========================================================

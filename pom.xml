@@ -19,6 +19,7 @@
         <module>agent-core</module>
         <module>agent-rag</module>
         <module>agent-server</module>
+        <module>agent-workflow</module>
     </modules>
 
     <parent>
@@ -70,6 +71,11 @@
             <dependency>
                 <groupId>com.agent</groupId>
                 <artifactId>agent-rag</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.agent</groupId>
+                <artifactId>agent-workflow</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
