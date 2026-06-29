@@ -19,10 +19,13 @@ import java.util.UUID;
 @Slf4j
 @RestController
 @RequestMapping("/api/knowledge")
-@RequiredArgsConstructor
 public class KnowledgeController {
 
     private final KnowledgeService knowledgeService;
+
+    public KnowledgeController(KnowledgeService knowledgeService) {
+        this.knowledgeService = knowledgeService;
+    }
 
     /**
      * 文档上传接口。

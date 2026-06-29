@@ -4,6 +4,9 @@
 
 server:
   port: 8080
+  error:
+    include-message: always
+    include-exception: true
 
 spring:
   application:

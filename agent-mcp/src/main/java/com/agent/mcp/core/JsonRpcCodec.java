@@ -50,7 +50,7 @@ public class JsonRpcCodec {
      */
     public JsonRpcMessage decode(String jsonLine) {
       try {
-        return objectMapper.readValue(jsonLine, JsonRpcMessage.class)
+        return objectMapper.readValue(jsonLine, JsonRpcMessage.class);
       } catch (Exception e) {
     return JsonRpcMessage.error(
         null,

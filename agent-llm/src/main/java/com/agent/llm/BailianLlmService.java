@@ -103,8 +103,8 @@ public class BailianLlmService implements LlmService {
       .bodyValue(body)
       .retrieve()
       .bodyToFlux(String.class)
-      .filter(line->line.startsWith("data:")&&!line.equals("data:[DONE]"))
-      .map(this::parseSSELine)
+      .filter(line -> !line.isBlank() && !"[DONE]".equals(line.trim()))
+      .map(this::parseSSELine2)
       .transform(this::aggregateToolCalls);
 
     }
@@ -287,7 +287,67 @@ public class BailianLlmService implements LlmService {
     }
 
     /**
-     * 解析一行 SSE data。
+     * 解析百炼 SSE 行（裸 JSON 格式，无 data: 前缀）。
+     */
+    private ChatChunk parseSSELine2(String jsonLine) {
+        try {
+            JsonNode root = objectMapper.readTree(jsonLine);
+            JsonNode choice = root.path("choices").get(0);
+            JsonNode delta = choice.path("delta");
+            String finishReason = choice.path("finish_reason").asText(null);
+
+            // 普通文本内容
+            if (delta.has("content") && !delta.get("content").isNull()) {
+                String content = delta.get("content").asText();
+                if (!content.isEmpty()) {
+                    return ChatChunk.builder()
+                            .type(ChatChunk.ChunkType.CONTENT)
+                            .content(content)
+                            .finishReason(finishReason)
+                            .build();
+                }
+                // content 为空但有 finish_reason → 结束标记
+                if ("stop".equals(finishReason)) {
+                    return ChatChunk.builder()
+                            .type(ChatChunk.ChunkType.FINISH)
+                            .finishReason(finishReason)
+                            .build();
+                }
+                // content 为空且无 finish_reason → 跳过（首帧 role:assistant）
+                return ChatChunk.builder().type(ChatChunk.ChunkType.FINISH).build();
+            }
+
+            // 工具调用
+            if (delta.has("tool_calls")) {
+                JsonNode tcNode = delta.get("tool_calls").get(0);
+                ChatChunk.ChatChunkBuilder builder = ChatChunk.builder().finishReason(finishReason);
+                if (tcNode.has("id") && !tcNode.get("id").isNull()) {
+                    builder.toolCallId(tcNode.get("id").asText());
+                }
+                JsonNode func = tcNode.path("function");
+                if (func.has("name") && !func.get("name").isNull()) {
+                    builder.toolName(func.get("name").asText());
+                }
+                if (func.has("arguments") && !func.get("arguments").isNull()) {
+                    builder.argumentsDelta(func.get("arguments").asText());
+                }
+                return builder.build();
+            }
+
+            // 纯结束标记
+            return ChatChunk.builder()
+                    .type(ChatChunk.ChunkType.FINISH)
+                    .finishReason(finishReason)
+                    .build();
+
+        } catch (Exception e) {
+            log.error("SSE 解析失败: {}", jsonLine, e);
+            return ChatChunk.builder().type(ChatChunk.ChunkType.FINISH).build();
+        }
+    }
+
+    /**
+     * 解析一行 SSE data（兼容 OpenAI 兼容格式，带 data: 前缀）。
      *
      * @param sseLine 格式: {@code data: {"choices":[...]}}
      * @return ChatChunk（可能为 null，表示应跳过此行）

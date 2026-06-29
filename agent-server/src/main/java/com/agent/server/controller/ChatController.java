@@ -6,7 +6,6 @@ import com.agent.core.FcAgentEngine;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
@@ -16,69 +15,78 @@ import reactor.core.publisher.Mono;
 
 import java.util.Map;
 
-/**
- * 对话 API 控制器。
- */
 @Slf4j
 @RestController
 @RequestMapping("/api/chat")
-@RequiredArgsConstructor
 public class ChatController {
 
     private final FcAgentEngine agentEngine;
     private final ConversationStore conversationStore;
     private final ObjectMapper objectMapper;
 
-    public record ChatRequest(
-            String message,
-            String conversationId
-    ) {}
+    public ChatController(FcAgentEngine agentEngine,
+                          ConversationStore conversationStore,
+                          ObjectMapper objectMapper) {
+        this.agentEngine = agentEngine;
+        this.conversationStore = conversationStore;
+        this.objectMapper = objectMapper;
+    }
 
-    /**
-     * SSE 流式对话接口。
-     */
+    @GetMapping("/ping")
+    public Map<String, Object> ping() {
+        return Map.of("pong", true);
+    }
+
     @PostMapping(path = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<ServerSentEvent<String>> chatStream(@RequestBody ChatRequest request) {
-        String convId = request.conversationId() != null
-                ? request.conversationId()
-                : conversationStore.createConversation("新对话", "qwen-plus");
-
-        return agentEngine.executeStream(request.message(), convId)
-                .map(event -> ServerSentEvent.<String>builder()
-                        .event(event.getType().name().toLowerCase())
-                        .data(toJson(event))
-                        .build())
-                .onErrorResume(e -> {
-                    log.error("Agent 执行异常", e);
-                    return Flux.just(ServerSentEvent.<String>builder()
-                            .event("error")
-                            .data("{\"error\":\"" + e.getMessage() + "\"}")
-                            .build());
-                });
+    public Flux<ServerSentEvent<String>> chatStream(@RequestBody String rawBody) {
+        try {
+            Map<String, Object> request = objectMapper.readValue(rawBody, Map.class);
+            String message = (String) request.getOrDefault("message", "");
+            String convId = request.containsKey("conversationId") && request.get("conversationId") != null
+                    ? (String) request.get("conversationId")
+                    : conversationStore.createConversation("新对话", "qwen-plus");
+            return agentEngine.executeStream(message, convId)
+                    .map(event -> ServerSentEvent.<String>builder()
+                            .event(event.getType().name().toLowerCase())
+                            .data(toJson(event))
+                            .build())
+                    .onErrorResume(e -> {
+                        log.error("Agent 执行异常", e);
+                        return Flux.just(ServerSentEvent.<String>builder()
+                                .event("error")
+                                .data("{\"error\":\"" + e.getMessage() + "\"}")
+                                .build());
+                    });
+        } catch (Exception e) {
+            return Flux.just(ServerSentEvent.<String>builder()
+                    .event("error")
+                    .data("{\"error\":\"请求解析失败: " + e.getMessage() + "\"}")
+                    .build());
+        }
     }
 
-    /**
-     * 同步对话接口（调试用）。
-     */
     @PostMapping
-    public Mono<Map<String, Object>> chatSync(@RequestBody ChatRequest request) {
-        String convId = request.conversationId() != null
-                ? request.conversationId()
-                : conversationStore.createConversation("新对话", "qwen-plus");
-
-        return agentEngine.executeStream(request.message(), convId)
-                .collectList()
-                .map(events -> {
-                    String answer = events.stream()
-                            .filter(e -> e.getType() == AgentEvent.EventType.ANSWER)
-                            .map(AgentEvent::getContent)
-                            .findFirst().orElse("无响应");
-                    return Map.of("answer", answer, "conversationId", convId,
-                            "eventCount", events.size());
-                });
+    public Mono<Map<String, Object>> chatSync(@RequestBody String rawBody) {
+        try {
+            Map<String, Object> request = objectMapper.readValue(rawBody, Map.class);
+            String message = (String) request.getOrDefault("message", "");
+            String convId = request.containsKey("conversationId") && request.get("conversationId") != null
+                    ? (String) request.get("conversationId")
+                    : conversationStore.createConversation("新对话", "qwen-plus");
+            return agentEngine.executeStream(message, convId)
+                    .collectList()
+                    .map(events -> {
+                        String answer = events.stream()
+                                .filter(e -> e.getType() == AgentEvent.EventType.ANSWER)
+                                .map(AgentEvent::getContent)
+                                .findFirst().orElse("无响应");
+                        return Map.of("answer", answer, "conversationId", convId,
+                                "eventCount", events.size());
+                    });
+        } catch (Exception e) {
+            return Mono.just(Map.of("error", "请求解析失败: " + e.getMessage()));
+        }
     }
-
-    // ===== 辅助方法 =====
 
     private String toJson(Object obj) {
         try {

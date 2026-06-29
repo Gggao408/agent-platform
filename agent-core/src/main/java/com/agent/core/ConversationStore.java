@@ -124,30 +124,30 @@ public class ConversationStore {
      * @param messages       完整消息列表
      */
     public void save(String conversationId, List<Message> messages) {
-       try(Connection conn = dataSource.getConnection();
-    ) {
-        conn.setAutoCommit(false);
-        try (PreparedStatement del = conn.prepareStatement("DELETE FROM messages WHERE conversation_id = ?")){
-            del.setObject(1, UUID.fromString(conversationId));
-            del.executeUpdate();
-        } 
-        String sql = "INSERT INTO messages (conversation_id,role,content,tool_calls,tool_call_id) VALUES (?,?,?,?,?)";
-        try(PreparedStatement stmt = conn.prepareStatement(sql)){
-            for(Message msg : messages){
-                stmt.setObject(1, UUID.fromString(conversationId));
-                stmt.setString(2,msg.getRole());
-                stmt.setString(3,msg.getContent());
-                stmt.setString(4,serializeToolCalls(msg.getToolCalls()));
-                stmt.setString(5,msg.getToolCallId());
-                stmt.addBatch();
+        // 先删后插（自动提交模式，无需手动事务）
+        UUID convUuid = UUID.fromString(conversationId);
+        try (Connection conn = dataSource.getConnection()) {
+            try (PreparedStatement del = conn.prepareStatement("DELETE FROM messages WHERE conversation_id = ?")) {
+                del.setObject(1, convUuid);
+                del.executeUpdate();
             }
-            stmt.executeBatch();
+            String sql = "INSERT INTO messages (conversation_id,role,content,tool_calls,tool_call_id) VALUES (?::uuid,?,?,?::jsonb,?)";
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                for (Message msg : messages) {
+                    stmt.setObject(1, convUuid);
+                    stmt.setString(2, msg.getRole());
+                    stmt.setString(3, msg.getContent());
+                    stmt.setString(4, serializeToolCalls(msg.getToolCalls()));
+                    stmt.setString(5, msg.getToolCallId());
+                    stmt.addBatch();
+                }
+                stmt.executeBatch();
+            }
+        } catch (SQLException e) {
+            log.error("保存会话失败, id={}", conversationId, e);
+            throw new RuntimeException("保存会话失败: " + e.getMessage(), e);
         }
-        conn.commit();
-     }
-     catch (SQLException e) {
-        throw new RuntimeException("保存会话失败",e);
-       }
+    }
     /**
      * TODO: 列出所有会话（概要信息）。
      *

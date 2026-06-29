@@ -147,5 +147,6 @@ public class ChunkSplitter {
             chunks.add(new Chunk(index++, buffer.toString(), bufferStart,bufferStart+buffer.length()));
         }
         return chunks;
-       }
+    }
+}
 
