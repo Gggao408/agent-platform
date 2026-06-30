@@ -88,7 +88,7 @@ public class VectorStoreService {
     public void insertChunks(UUID documentId,
                               List<ChunkSplitter.Chunk> chunks,
                               List<float[]> embeddings) {
-       String sql = "INSERT INTO knowledge_chunks(id,document_id,chunk_index,chunk_text,embedding) VALUES (?,?,?,?,?)";
+       String sql = "INSERT INTO knowledge_chunks(id,document_id,chunk_index,chunk_text,embedding) VALUES (?,?,?,?,?::vector)";
        try(Connection conn = dataSource.getConnection();
     PreparedStatement stmt = conn.prepareStatement(sql)) {
        for (int i = 0; i < chunks.size(); i++) {
@@ -101,7 +101,7 @@ public class VectorStoreService {
         }
         stmt.executeBatch();
     } catch (SQLException e) {
-        throw new RuntimeException("插入向量失败", e);
+        throw new RuntimeException("插入向量失败: " + e.getMessage(), e);
     }
        }
 
@@ -163,6 +163,24 @@ public class VectorStoreService {
                     return results;
                 }
     
+
+    /**
+     * 插入文档记录到 documents 表。
+     */
+    public void insertDocument(UUID id, String fileName, String filePath) {
+        String sql = "INSERT INTO documents (id, file_name, file_type, file_size, file_path, status) VALUES (?,?,?,?,?,'PROCESSING')";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setObject(1, id);
+            stmt.setString(2, fileName);
+            stmt.setString(3, fileName.contains(".") ? fileName.substring(fileName.lastIndexOf(".")+1) : "txt");
+            stmt.setLong(4, 0);
+            stmt.setString(5, filePath);
+            stmt.executeUpdate();
+        } catch (SQLException e) {
+            throw new RuntimeException("插入文档记录失败: " + e.getMessage(), e);
+        }
+    }
 
     /**
      * TODO: 删除指定文档的所有向量块。

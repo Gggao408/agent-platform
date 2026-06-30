@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS knowledge_chunks (
     document_id     UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
     chunk_index     INTEGER NOT NULL,         -- 块序号（从0开始）
     chunk_text      TEXT NOT NULL,            -- 块文本内容
-    embedding       vector(1536),             -- 向量（阿里百炼 text-embedding-v3: 1536维）
+    embedding       vector(1024),             -- 向量（阿里百炼 text-embedding-v3: 1024维）
     metadata        JSONB,                    -- 额外元数据（页码、章节等）
     created_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );

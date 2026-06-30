@@ -21,6 +21,10 @@
         </dependency>
         <dependency>
             <groupId>com.agent</groupId>
+            <artifactId>agent-mcp</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.agent</groupId>
             <artifactId>agent-llm</artifactId>
         </dependency>
 

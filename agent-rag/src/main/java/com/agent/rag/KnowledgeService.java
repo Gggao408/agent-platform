@@ -68,6 +68,8 @@ public class KnowledgeService {
     public UUID uploadDocument(Path filePath, String fileName) {
       UUID documentId = UUID.randomUUID();
       try {
+        //0. 先在 documents 表插入记录
+        vectorStore.insertDocument(documentId, fileName, filePath.toString());
         //tika解析文档
         DocumentParser.ParseResult parsed = documentParser.parse(filePath);
         log.info("文档解析完成: {}, 方式: {}, 字数: {}", fileName, parsed.method(), parsed.text().length());
@@ -84,8 +86,8 @@ public class KnowledgeService {
        log.info("文档入库完成： {}", fileName);
        return documentId;
       } catch (Exception e) {
-       log.error("文档处理失败: {}", fileName, e);
-    throw new RuntimeException("文档处理失败: " + fileName, e);
+       log.error("文档处理失败: {}, 原因: {}", fileName, e.getMessage(), e);
+    throw new RuntimeException("文档处理失败: " + fileName + " - " + e.getMessage(), e);
       }
     }
 
@@ -121,11 +123,19 @@ public class KnowledgeService {
       if(candidates.isEmpty()){
         return "未找到！";
       }
-      List<RerankService.RerankResult> reranked = rerankService.rerank(query, candidates, Math.min(topK,candidates.size()));
+      // 尝试精排，失败则回退到粗排结果
+      List<VectorStoreService.SearchResult> finalResults;
+      try {
+          List<RerankService.RerankResult> reranked = rerankService.rerank(query, candidates, Math.min(topK,candidates.size()));
+          finalResults = reranked.stream().map(RerankService.RerankResult::chunk).toList();
+      } catch (Exception e) {
+          log.warn("Rerank 失败，回退到向量检索结果: {}", e.getMessage());
+          finalResults = candidates.subList(0, Math.min(topK, candidates.size()));
+      }
       StringBuilder sb = new StringBuilder("请基于以下资料回答问题：\n\n");
-      for(int i =0; i< reranked.size();i++){
+      for(int i =0; i< finalResults.size();i++){
         sb.append("---\n");
-     sb.append("[来源").append(i + 1).append("] ").append(reranked.get(i).chunk().chunkText()).append("\n");
+     sb.append("[来源").append(i + 1).append("] ").append(finalResults.get(i).chunkText()).append("\n");
     }
     return sb.toString();
       }

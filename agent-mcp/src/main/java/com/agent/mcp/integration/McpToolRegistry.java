@@ -168,9 +168,9 @@ public class McpToolRegistry {
      * @param toolDefinition 工具定义
      * @param handler        执行处理器
      */
-    public void registerDirectTool(String toolName, ToolDefinition toolDefinition,
+    public void registerDirectTool(String prefix, String toolName, ToolDefinition toolDefinition,
                                     java.util.function.Function<JsonNode, JsonNode> handler) {
-        String fullName = "workflow:" + toolName;
+        String fullName = prefix + ":" + toolName;
         toolDefinitions.put(fullName, ToolDefinition.builder()
                 .name(fullName)
                 .description(toolDefinition.getDescription())

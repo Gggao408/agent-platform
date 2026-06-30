@@ -226,12 +226,7 @@ public class McpSession implements Closeable {
         return response.getResult();
     }
 
-    // ==========================================================
-    // 资源清理（你来写）
-    // ==========================================================
-
-    /**
-     * TODO: 关闭 Session，释放资源。
+   /* 
      *
      * <ol>
      *   <li>关闭 writer（发送 EOF 信号给子进程）</li>

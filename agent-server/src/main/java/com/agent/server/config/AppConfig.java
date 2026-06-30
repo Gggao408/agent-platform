@@ -191,7 +191,7 @@ public class AppConfig {
             ObjectMapper objectMapper,
             McpToolRegistry mcpToolRegistry) {
         var bridge = new com.agent.workflow.engine.WorkflowToolBridge(workflowEngine, objectMapper);
-        mcpToolRegistry.registerDirectTool("execute_workflow",
+        mcpToolRegistry.registerDirectTool("workflow", "execute_workflow",
                 bridge.getToolDefinition(),
                 args -> {
                     try {
@@ -241,5 +241,18 @@ public class AppConfig {
                                               RerankService rerankService) {
         return new KnowledgeService(documentParser, chunkSplitter, llmService,
                 vectorStoreService, rerankService);
+    }
+
+    @Bean
+    public com.agent.rag.KnowledgeToolBridge knowledgeToolBridge(
+            KnowledgeService knowledgeService,
+            ObjectMapper objectMapper,
+            McpToolRegistry mcpToolRegistry) {
+        var bridge = new com.agent.rag.KnowledgeToolBridge(knowledgeService, objectMapper);
+        mcpToolRegistry.registerDirectTool("knowledge", "search_knowledge",
+                bridge.getToolDefinition(),
+                args -> bridge.execute(args));
+        log.info("RAG 知识库工具已注册到 Agent (search_knowledge)");
+        return bridge;
     }
 }

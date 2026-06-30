@@ -151,7 +151,6 @@ public abstract class McpServer {
                 out.newLine();
                 out.flush();
             } catch (Exception e) {
-                // TODO Auto-generated catch block
                 log.error("处理消息失败",e);
                 JsonRpcMessage errorReap = JsonRpcMessage.error(null,JsonRpcMessage.INTERNAL_ERROR, e.getMessage());
                 try {
