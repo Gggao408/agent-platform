@@ -209,6 +209,22 @@ public class ConversationStore {
             return null;
         }
     }
+    /** 
+     * 更新会话摘要
+     * 建立新查表语句
+     * **/
+public void updateSummary(String conversationId, String summary){
+    String sql = "UPDATE conversations SET summary = ? WHERE id = ?";
+    try (Connection conn = dataSource.getConnection();){
+        PreparedStatement stmt = conn.prepareStatement(sql);
+        stmt.setString(1,summary);
+        stmt.setObject(2, UUID.fromString(conversationId));
+        stmt.executeUpdate();
+
+    } catch (SQLException e) {
+        log.error("更新摘要失败",e);
+    }
+}
 
     /**
      * 将 JSONB 字符串反序列化为 ToolCall 列表。

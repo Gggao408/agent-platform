@@ -121,14 +121,13 @@ public class FcAgentEngine {
      * @return AgentEvent 事件流
      */
     public Flux<AgentEvent> executeStream(String userMessage, String conversationId) {
-        
-            return Flux.defer(() -> {
+        return Flux.defer(() -> {
             List<Message> history = conversationStore.load(conversationId);
             history.add(Message.user(userMessage));
-            return executeLoop(history,new AtomicInteger(1),conversationId);
+            history = summarizeIfNeeded(history, conversationId);
+            return executeLoop(history, new AtomicInteger(1), conversationId);
         });
-
-}
+    }
 private Flux<AgentEvent> executeLoop(List<Message> history,
                                                 AtomicInteger round,
                                                 String conversationId){
@@ -221,6 +220,69 @@ private List<ToolCall> aggregateToolCalls(List<ChatChunk> chunks) {
             .flatMap(c -> c.getAllToolCalls().stream())
             .collect(java.util.stream.Collectors.toList());
 }
+
+    // ==========================================================
+    // 对话摘要（长期记忆）
+    // ==========================================================
+
+    /**
+     * 估算对话历史的大致 token 数。
+     * 中英文混合场景 1 token ≈ 2 字符。
+     */
+    private int estimateTokens(List<Message> history) {
+        int totalChars = 0;
+        for (Message m : history) {
+            if (m.getContent() != null) totalChars += m.getContent().length();
+        }
+        return totalChars / 2;
+    }
+
+    /**
+     * 如果历史消息过长，用 LLM 把早期消息压缩为一段摘要。
+     * 保留最近 6 条消息不变，压缩更早的消息。
+     */
+    private List<Message> summarizeIfNeeded(List<Message> history, String conversationId) {
+        if (estimateTokens(history) < 15000) {
+            return history;
+        }
+
+        int keepCount = Math.min(6, history.size());
+        List<Message> recent = new ArrayList<>(history.subList(history.size() - keepCount, history.size()));
+        List<Message> oldMessages = history.subList(0, history.size() - keepCount);
+
+        // 拼成文本给 LLM 做摘要
+        StringBuilder oldText = new StringBuilder();
+        for (Message m : oldMessages) {
+            if (m.getContent() != null) {
+                oldText.append("[").append(m.getRole()).append("]: ")
+                       .append(m.getContent()).append("\n");
+            }
+        }
+
+        try {
+            LlmService.ChatResponse resp = llmService.chatSync(
+                List.of(Message.system("请用一段话（不超过200字）总结以下对话的关键信息，只输出摘要内容："),
+                        Message.user(oldText.toString())),
+                List.of()
+            );
+            String summary = resp.content() != null ? resp.content() : "（摘要生成失败）";
+
+            List<Message> compressed = new ArrayList<>();
+            compressed.add(Message.system("【之前对话摘要】" + summary));
+            compressed.addAll(recent);
+
+            // 异步存摘要到数据库
+            conversationStore.updateSummary(conversationId, summary);
+
+            log.info("对话摘要完成，压缩前 {} 条 → 压缩后 {} 条 ({} tokens → {} tokens)",
+                    history.size(), compressed.size(),
+                    estimateTokens(history), estimateTokens(compressed));
+            return compressed;
+        } catch (Exception e) {
+            log.error("摘要生成失败，降级为保留最近消息", e);
+            return recent;
+        }
+    }
 
     // ==========================================================
     // 辅助方法
