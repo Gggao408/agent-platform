@@ -40,6 +40,10 @@
             <groupId>com.agent</groupId>
             <artifactId>agent-workflow</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.agent</groupId>
+            <artifactId>agent-multi</artifactId>
+        </dependency>
 
         <!-- Spring Boot WebFlux (SSE 流式响应核心) -->
         <dependency>

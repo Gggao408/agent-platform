@@ -205,6 +205,38 @@ public class AppConfig {
     }
 
     // ==========================================================
+    // 多 Agent 协作 —— 三个专家子 Agent
+    // ==========================================================
+
+    @Bean
+    public com.agent.multi.agents.SearchExpertAgent searchExpertAgent(LlmService llmService) {
+        return new com.agent.multi.agents.SearchExpertAgent(llmService);
+    }
+
+    @Bean
+    public com.agent.multi.agents.DataAnalystAgent dataAnalystAgent(LlmService llmService) {
+        return new com.agent.multi.agents.DataAnalystAgent(llmService);
+    }
+
+    @Bean
+    public com.agent.multi.agents.ReportWriterAgent reportWriterAgent(LlmService llmService) {
+        return new com.agent.multi.agents.ReportWriterAgent(llmService);
+    }
+
+    @Bean
+    public Object multiAgentRegistration(
+            com.agent.multi.agents.SearchExpertAgent searchExpert,
+            com.agent.multi.agents.DataAnalystAgent dataAnalyst,
+            com.agent.multi.agents.ReportWriterAgent reportWriter,
+            McpToolRegistry mcpToolRegistry) {
+        searchExpert.registerAsTool(mcpToolRegistry, "expert", "search_expert");
+        dataAnalyst.registerAsTool(mcpToolRegistry, "expert", "data_analyst");
+        reportWriter.registerAsTool(mcpToolRegistry, "expert", "report_writer");
+        log.info("多 Agent 协作已就绪: 3 个专家子 Agent 已注册");
+        return "multi-agent-ready";
+    }
+
+    // ==========================================================
     // RAG 知识库
     // ==========================================================
 
